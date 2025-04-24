@@ -20,7 +20,7 @@ public class AgentFinder {
     }
 
     /**
-     * Enregistre un agent dans le service DF (Directory Facilitator)
+     * Enregistre un agent dans le service DF (Directory Facilitator) avec un identifiant unique
      */
     public static void registerService(Agent agent, String type) {
         DFAgentDescription dfd = new DFAgentDescription();
@@ -28,7 +28,8 @@ public class AgentFinder {
 
         ServiceDescription sd = new ServiceDescription();
         sd.setType(type);
-        sd.setName(agent.getLocalName() + "-" + type);
+        // Utiliser l'AID complet comme nom de service pour garantir l'unicité
+        sd.setName(agent.getLocalName() + "-" + type + "-" + System.currentTimeMillis());
 
         dfd.addServices(sd);
 

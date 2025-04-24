@@ -21,10 +21,8 @@ public class ConsultationBehaviour extends CyclicBehaviour {
 
     @Override
     public void action() {
-
         ConsultationSession session = agent.getCurrentSession();
         System.out.println("DEBUG: État actuel de session.getPatientAgentId() = " + session.getPatientAgentId());
-
 
         // Ne traiter que si en mode consultation
         if (session.getState() != ConsultationState.CONSULTATION_IN_PROGRESS) {
@@ -42,29 +40,23 @@ public class ConsultationBehaviour extends CyclicBehaviour {
         System.out.println("Doctor: Listening for messages from patient: " + session.getPatientAgentId());
 
         // Attendre un message du patient en cours de consultation
-        // Attendre un message du patient en cours de consultation
         MessageTemplate template = MessageTemplate.and(
                 MessageTemplate.MatchPerformative(ACLMessage.INFORM),
                 MessageTemplate.MatchSender(new jade.core.AID(session.getPatientAgentId(), AID.ISLOCALNAME))
         );
 
-        /*************************/
-        // Récupérer TOUS les messages sans filtre pour voir ce qui arrive réellement
+        // Débogage - récupérer tous les messages
         ACLMessage anyMessage = agent.receive();
         if (anyMessage != null) {
             System.out.println("DEBUG: Message reçu de: " + anyMessage.getSender().getName());
             System.out.println("DEBUG: Contenu: " + anyMessage.getContent());
             System.out.println("DEBUG: Performatif: " + ACLMessage.getPerformative(anyMessage.getPerformative()));
-
-            // Remettre le message dans la file d'attente pour qu'il puisse être traité normalement
             agent.putBack(anyMessage);
         } else {
             System.out.println("DEBUG: Aucun message en file d'attente");
         }
-        /*************************/
 
         ACLMessage message = agent.receive(template);
-
 
         if (message != null) {
             System.out.println("Doctor: Received message from patient: " + message.getContent());
@@ -101,13 +93,35 @@ public class ConsultationBehaviour extends CyclicBehaviour {
                     // Afficher la réponse
                     ConsoleManager.printDoctorMessage(agent.getLocalName(), responseText);
 
-                    // Envoyer la réponse au patient
-                    ACLMessage reply = message.createReply();
-                    reply.setPerformative(ACLMessage.INFORM);
-                    reply.setContent(responseText);
-                    agent.send(reply);
+                    // MODIFICATION ICI: Vérifier si la réponse commence par "DIAGNOSTIC:"
+                    if (responseText.startsWith("DIAGNOSTIC:")) {
+                        // C'est un diagnostic - utiliser PROPOSE au lieu de INFORM
+                        ACLMessage diagReply = message.createReply();
+                        diagReply.setPerformative(ACLMessage.PROPOSE); // Utiliser PROPOSE pour le diagnostic
+                        diagReply.setContent(responseText); // Garder le préfixe "DIAGNOSTIC:"
+                        agent.send(diagReply);
 
-                    // Vérifier si le diagnostic est terminé
+                        ConsoleManager.printSuccess("Diagnostic envoyé au patient: " + session.getPatientName());
+
+                        // Attendre un peu avant de traiter la fin du diagnostic
+//                        try {
+//                            Thread.sleep(2000);
+//                        } catch (InterruptedException e) {
+//                            Thread.currentThread().interrupt();
+//                        }
+//
+//                        // Terminer la consultation après envoi du diagnostic
+//                        ConsoleManager.printInfo("Diagnostic terminé avec " + session.getPatientName());
+//                        handleEndConsultation(session);
+                    } else {
+                        // Réponse normale - utiliser INFORM
+                        ACLMessage reply = message.createReply();
+                        reply.setPerformative(ACLMessage.INFORM);
+                        reply.setContent(responseText);
+                        agent.send(reply);
+                    }
+
+                    // L'ancienne vérification pour END_DIAG (remplacée par la détection de DIAGNOSTIC: ci-dessus)
                     if (apiResponse.isDiagnosticComplete()) {
                         // Attendre un peu avant de traiter la fin du diagnostic
                         try {

@@ -1,10 +1,14 @@
 package org.medecine.agents;
 
+import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.SequentialBehaviour;
+import jade.core.behaviours.TickerBehaviour;
+import jade.lang.acl.ACLMessage;
 import org.medecine.behaviours.medecin.WaitForPatientBehaviour;
 import org.medecine.gui.ConsoleManager;
 import org.medecine.models.ConsultationSession;
+import org.medecine.models.ConsultationState;
 import org.medecine.utils.APIClient;
 import org.medecine.utils.AgentFinder;
 
@@ -45,6 +49,8 @@ public class MedecinAgent extends Agent {
         AgentFinder.registerService(this, "medecin-service");
 
         // Ajouter le comportement d'attente de patient
+        // Ajouter le comportement pour signaler la disponibilité
+        addAvailabilitySignalBehaviour();
         SequentialBehaviour mainBehaviour = new SequentialBehaviour(this);
         mainBehaviour.addSubBehaviour(new WaitForPatientBehaviour(this));
         addBehaviour(mainBehaviour);
@@ -69,11 +75,48 @@ public class MedecinAgent extends Agent {
         ConsoleManager.printInfo("Agent Médecin " + getLocalName() + " terminé.");
     }
 
+    // Dans la classe MedecinAgent.java, ajoutez cette méthode
+    // Dans addAvailabilitySignalBehaviour de MedecinAgent
+    private void addAvailabilitySignalBehaviour() {
+        addBehaviour(new TickerBehaviour(this, 5000) { // Toutes les 5 secondes
+            @Override
+            protected void onTick() {
+                // Si aucun patient, alors disponible
+                boolean isAvailable = getCurrentSession().getState() == ConsultationState.WAITING_FOR_PATIENT;
+
+                // Réceptionniste par nom exact - plus fiable que la recherche DF dans certains cas
+                AID receptionnisteAID = new AID("Receptionniste", AID.ISLOCALNAME);
+
+                // Signaler la disponibilité au réceptionniste
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(receptionnisteAID);
+                msg.setContent(isAvailable ? "AVAILABLE" : "BUSY");
+                send(msg);
+
+                System.out.println("Médecin a signalé sa disponibilité: " + (isAvailable ? "Disponible" : "Occupé"));
+            }
+        });
+    }
     public APIClient getApiClient() {
         return apiClient;
     }
 
     public ConsultationSession getCurrentSession() {
         return currentSession;  // Doit être un champ d'instance, pas une variable locale
+    }
+
+    /**
+     * Méthode pour envoyer un diagnostic au patient
+     * @param patientAID L'AID du patient
+     * @param diagnosticContent Le contenu du diagnostic
+     */
+    public void sendDiagnosticToPatient(AID patientAID, String diagnosticContent) {
+        ACLMessage diagMsg = new ACLMessage(ACLMessage.PROPOSE);
+        diagMsg.addReceiver(patientAID);
+        diagMsg.setContent("DIAGNOSTIC:" + diagnosticContent);
+        send(diagMsg);
+
+        ConsoleManager.printSuccess("Diagnostic envoyé au patient: " + patientAID.getLocalName());
+        System.out.println("Diagnostic envoyé au patient avec le contenu: DIAGNOSTIC:" + diagnosticContent);
     }
 }
